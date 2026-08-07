@@ -39,22 +39,38 @@ export async function updateSession(request: NextRequest) {
 
   // IMPORTANT: If you remove getUser() and you use server-side rendering
   // with the Supabase client, your users may be randomly logged out.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let user: { id: string } | null = null
+  try {
+    const res = await supabase.auth.getUser()
+    user = res.data.user
+  } catch {
+    // If Supabase is unreachable (e.g. network/edge issues), fail open and
+    // let the route handle auth itself rather than crashing the middleware
+    // into a 404 for every request.
+    user = null
+  }
 
   const { pathname } = request.nextUrl
   const isAuthRoute = pathname.startsWith('/auth')
 
+  // Dev mode: allow a local dev cookie to stand in for a real session so the
+  // phone+OTP flow can be tested without an SMS provider.
+  const DEV_AUTH_COOKIE = 'cindel_dev_auth'
+  const isDevAuth =
+    process.env.NODE_ENV !== 'production' &&
+    request.cookies.get(DEV_AUTH_COOKIE)?.value === '1'
+
+  const isAuthenticated = !!user || isDevAuth
+
   // Anything outside the /auth/* flow requires an authenticated user.
-  if (!user && !isAuthRoute) {
+  if (!isAuthenticated && !isAuthRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
   }
 
   // Signed-in users shouldn't see the login / sign-up screens.
-  if (user && (pathname === '/auth/login' || pathname === '/auth/sign-up')) {
+  if (isAuthenticated && (pathname === '/auth/login' || pathname === '/auth/sign-up')) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)

@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
 
 import { CindelBrand } from '@/components/cindel-brand'
-import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -27,10 +26,13 @@ export default function AuthErrorPage() {
               have expired or already been used.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button asChild className="w-full">
-              <Link href="/auth/login">Back to log in</Link>
-            </Button>
+<CardContent>
+            <Link
+              href="/auth/login"
+              className="inline-flex w-full items-center justify-center rounded-lg border border-transparent bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/80"
+            >
+              Back to log in
+            </Link>
           </CardContent>
         </Card>
       </div>

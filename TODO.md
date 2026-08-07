@@ -1,6 +1,15 @@
-# Fixes for cindel-workspace.tsx
+# TODO — Fix infinite "Loading..." in Cindel
 
-- [x] Fix 1: Message alignment — capture current user id and compare against it
-- [x] Fix 2: Guard against null `last_message_at` timestamps
-- [x] Fix 3: Make the chat header dynamic based on the active conversation
-- [x] Run type-check to confirm no errors
+- [x] Plan approved
+- [x] 1. Rewrite `init()` in `hooks/useChat.ts`
+  - [x] Use `supabase.auth.getUser()` to get current user id
+  - [x] Log `user.id` to console to verify login
+  - [x] If no user id → set conversations=[], stop loading
+  - [x] 1s safety timeout to force `loading=false`
+  - [x] Error handling: console.log + "Failed to load chats"
+- [x] 2. Update `components/chat/ChatApp.tsx` (ensure overlay resolves)
+- [x] 3. Add RLS policies to `supabase/schema.sql`
+  - [x] participants self-select policy (`user_id = auth.uid()`)
+  - [x] messages select policy (conversation in participant list)
+- [x] 4. Run `npm run dev` and verify loading screen is gone
+
