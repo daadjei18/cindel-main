@@ -6,6 +6,7 @@ export type Profile = {
   avatar_url: string | null
   last_seen: string | null
   created_at: string | null
+  status: string | null
 }
 
 /** A direct/group conversation. */

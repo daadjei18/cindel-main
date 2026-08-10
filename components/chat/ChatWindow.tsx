@@ -15,6 +15,10 @@ export type ChatWindowProps = {
   onOpenProfile: () => void
 }
 
+/**
+ * Right-hand chat column. Fills its parent (which sizes it to w-[40%]).
+ * It is a flex column with its own internal scroll area for messages.
+ */
 export function ChatWindow({ other, myId, messages, onSend, onOpenProfile }: ChatWindowProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
@@ -25,7 +29,7 @@ export function ChatWindow({ other, myId, messages, onSend, onOpenProfile }: Cha
 
   if (!other) {
     return (
-      <section className="flex min-w-0 flex-1 flex-col items-center justify-center bg-cindel-bg px-6 text-center">
+      <section className="flex h-full min-w-0 flex-1 flex-col items-center justify-center bg-cindel-bg px-6 text-center">
         <div className="flex size-16 items-center justify-center rounded-2xl bg-cindel-panel text-cindel-muted">
           <MessageCircle className="size-8" />
         </div>
@@ -38,8 +42,8 @@ export function ChatWindow({ other, myId, messages, onSend, onOpenProfile }: Cha
   }
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col bg-cindel-bg">
-      <header className="flex items-center justify-between border-b border-cindel-border bg-cindel-header px-5 py-3">
+    <section className="flex h-full min-w-0 flex-col bg-cindel-bg">
+      <header className="flex shrink-0 items-center justify-between border-b border-cindel-border bg-cindel-header px-5 py-3">
         <div className="flex items-center gap-3">
           <Avatar name={other.username} online size="size-12" />
           <div>
@@ -58,7 +62,7 @@ export function ChatWindow({ other, myId, messages, onSend, onOpenProfile }: Cha
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
         {messages.length === 0 && (
           <div className="mx-auto mt-10 max-w-sm rounded-2xl bg-cindel-panel px-4 py-3 text-center text-sm text-cindel-muted">
             This is the beginning of your chat with{' '}

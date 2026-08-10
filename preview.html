@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cindel — Chat Preview</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          'cindel-bg': '#0b0b0f',
+          'cindel-panel': '#1f1f23',
+          'cindel-header': '#141419',
+          'cindel-bubble': '#29292f',
+          'cindel-border': '#34343d',
+          'cindel-accent': '#a855f7',
+          'cindel-muted': '#a3a3ad',
+          'cindel-online': '#4ade80',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  .hex { clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); -webkit-clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+</style>
+</head>
+<body class="bg-cindel-bg">
+<main class="flex h-screen w-full overflow-hidden bg-cindel-bg font-sans text-white">
+
+  <!-- ============ LEFT SIDEBAR ============ -->
+  <aside class="flex w-[340px] shrink-0 flex-col border-r border-cindel-border bg-cindel-header">
+
+    <!-- Top: logo + search -->
+    <div class="flex flex-col gap-3 border-b border-cindel-border p-4">
+      <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-extrabold tracking-tight text-white">Cin<span class="text-cindel-accent">del</span></h1>
+        <button type="button" class="rounded-lg bg-cindel-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-cindel-accent/80">+ New Hive</button>
+      </div>
+      <div class="flex items-center gap-2 rounded-lg border border-cindel-border bg-cindel-panel px-3 py-2 text-sm text-cindel-muted">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4 shrink-0"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/></svg>
+        <input placeholder="Search Hives..." class="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-cindel-muted" />
+      </div>
+    </div>
+
+    <!-- Hives header -->
+    <div class="flex items-center justify-between px-4 pb-2 pt-3">
+      <span class="text-xs font-semibold uppercase tracking-wider text-cindel-muted">Hives</span>
+      <span class="text-xs text-cindel-muted">12 active</span>
+    </div>
+
+    <!-- Hexagon grid -->
+    <div class="flex-1 overflow-y-auto px-4 pb-4">
+      <div class="grid grid-cols-4 gap-3 pt-2" id="hiveGrid">
+        <!-- 12 hives injected by JS -->
+      </div>
+    </div>
+
+    <!-- Bottom: NIS profile -->
+    <div class="flex items-center gap-3 border-t border-cindel-border p-4">
+      <span class="relative inline-flex size-9 shrink-0 hex bg-cindel-accent">
+        <span class="flex h-full w-full items-center justify-center text-sm font-bold text-white">NIS</span>
+        <span class="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-cindel-bg bg-cindel-online"></span>
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-sm font-semibold text-white">Nury Izzati Suhaimi</p>
+        <p class="truncate text-xs text-cindel-muted">Online</p>
+      </div>
+      <button type="button" class="text-cindel-muted transition hover:text-white">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-5"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============ RIGHT PANEL — Hive: Maya ============ -->
+  <section class="flex min-w-0 flex-1 flex-col bg-cindel-bg">
+
+    <!-- Chat header -->
+    <header class="flex shrink-0 items-center justify-between border-b border-cindel-border bg-cindel-header px-5 py-3">
+      <div class="flex items-center gap-3">
+        <span class="relative inline-flex size-11 shrink-0 hex bg-cindel-accent">
+          <span class="flex h-full w-full items-center justify-center text-sm font-bold text-white">MY</span>
+          <span class="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-cindel-bg bg-cindel-online"></span>
+        </span>
+        <div>
+          <h2 class="text-sm font-bold text-white">Hive: Maya</h2>
+          <p class="text-xs text-cindel-muted">12 members • Online now</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4 text-white">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-5"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+      </div>
+    </header>
+
+    <!-- Messages -->
+    <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4" id="messages">
+      <div class="mx-auto rounded-lg bg-cindel-panel px-3 py-1 text-[11px] text-white/60">Today</div>
+
+      <!-- Maya (left) -->
+      <div class="flex w-full items-end gap-2 justify-start">
+        <span class="relative inline-flex size-9 shrink-0 hex bg-cindel-accent"><span class="flex h-full w-full items-center justify-center text-sm font-bold text-white">MY</span></span>
+        <div class="relative max-w-[70%] rotate-[1deg] rounded-lg px-4 py-2.5 shadow-lg bg-cindel-bubble text-white">
+          <p class="text-sm leading-5 text-white">Hey! Just got your message about the new hive 🐝</p>
+          <p class="mt-1 text-[10px] text-cindel-muted">12:10 PM - Sun</p>
+        </div>
+      </div>
+
+      <!-- You (right) -->
+      <div class="flex w-full items-end gap-2 justify-end">
+        <div class="relative max-w-[70%] rotate-[-1deg] rounded-lg px-4 py-2.5 shadow-lg bg-cindel-accent text-white">
+          <p class="text-sm leading-5 text-white">Yesss, super excited to get it started!</p>
+          <p class="mt-1 text-[10px] text-white/80">12:12 PM - Sun</p>
+        </div>
+        <span class="relative inline-flex size-9 shrink-0 hex bg-cindel-panel"><span class="flex h-full w-full items-center justify-center text-sm font-bold text-white">YU</span></span>
+      </div>
+
+      <!-- Maya (left) -->
+      <div class="flex w-full items-end gap-2 justify-start">
+        <span class="relative inline-flex size-9 shrink-0 hex bg-cindel-accent"><span class="flex h-full w-full items-center justify-center text-sm font-bold text-white">MY</span></span>
+        <div class="relative max-w-[70%] rotate-[1deg] rounded-lg px-4 py-2.5 shadow-lg bg-cindel-bubble text-white">
+          <p class="text-sm leading-5 text-white">I added a few members. Check the list when you can ✨</p>
+          <p class="mt-1 text-[10px] text-cindel-muted">12:14 PM - Sun</p>
+        </div>
+      </div>
+
+      <!-- You (right) -->
+      <div class="flex w-full items-end gap-2 justify-end">
+        <div class="relative max-w-[70%] rotate-[-1deg] rounded-lg px-4 py-2.5 shadow-lg bg-cindel-accent text-white">
+          <p class="text-sm leading-5 text-white">Love it. Let's meet tomorrow to plan the first event!</p>
+          <p class="mt-1 text-[10px] text-white/80">12:15 PM - Sun</p>
+        </div>
+        <span class="relative inline-flex size-9 shrink-0 hex bg-cindel-panel"><span class="flex h-full w-full items-center justify-center text-sm font-bold text-white">YU</span></span>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="flex shrink-0 items-end gap-2 border-t border-cindel-border bg-cindel-header px-4 py-3">
+      <button type="button" aria-label="Attach file" class="flex size-10 shrink-0 items-center justify-center text-cindel-muted transition hover:text-white">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-5"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+      </button>
+      <input id="msgInput" placeholder="Write a message to #Hive..." class="flex-1 rounded-xl border border-cindel-border bg-cindel-panel px-4 py-3 text-sm text-white outline-none placeholder:text-cindel-muted focus:border-cindel-accent" />
+      <button type="button" onclick="sendMsg()" aria-label="Send message" class="relative flex size-12 shrink-0 items-center justify-center transition hover:scale-105 hex bg-cindel-accent">
+        <svg viewBox="0 0 24 24" fill="currentColor" class="relative z-10 size-5 text-white"><path d="M3.4 20.4 20.85 12.92a1 1 0 0 0 0-1.84L3.4 3.6a.993.993 0 0 0-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91Z"/></svg>
+      </button>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Build 12 hive hexagons
+  const grid = document.getElementById('hiveGrid');
+  for (let i = 0; i < 12; i++) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'relative aspect-square w-full transition-transform duration-200 hover:scale-105';
+    btn.innerHTML = `
+      <span class="absolute inset-0 flex items-center justify-center bg-cindel-panel hex">
+        <span class="absolute inset-[2px] flex items-center justify-center border-2 border-dashed border-cindel-border bg-cindel-header hex">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-5 text-cindel-accent"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+        </span>
+      </span>`;
+    grid.appendChild(btn);
+  }
+
+  // Functional send + Enter key
+  const input = document.getElementById('msgInput');
+  const msgs = document.getElementById('messages');
+  function sendMsg() {
+    const text = input.value.trim();
+    if (!text) return;
+    const now = new Date();
+    const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const day = now.toLocaleDateString([], { weekday: 'short' });
+    const row = document.createElement('div');
+    row.className = 'flex w-full items-end gap-2 justify-end';
+    row.innerHTML = `
+      <div class="relative max-w-[70%] rotate-[-1deg] rounded-lg px-4 py-2.5 shadow-lg bg-cindel-accent text-white">
+        <p class="text-sm leading-5 text-white"></p>
+        <p class="mt-1 text-[10px] text-white/80"></p>
+      </div>
+      <span class="relative inline-flex size-9 shrink-0 hex bg-cindel-panel"><span class="flex h-full w-full items-center justify-center text-sm font-bold text-white">YU</span></span>`;
+    row.querySelector('p.text-sm').textContent = text;
+    row.querySelector('p.text-[10px]').textContent = time + ' - ' + day;
+    msgs.appendChild(row);
+    input.value = '';
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMsg(); });
+</script>
+</body>
+</html>

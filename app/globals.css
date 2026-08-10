@@ -189,3 +189,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Honeycomb hexagon (pointy top/bottom, flat left/right).             */
+/* Applied via .hex so the clip-path is guaranteed in the CSS output   */
+/* (Tailwind arbitrary values with commas can silently not generate).  */
+/* ------------------------------------------------------------------ */
+.hex {
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  -webkit-clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}

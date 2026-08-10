@@ -4,15 +4,19 @@
 -- ============================================================
 
 -- ---------- PROFILES ----------
--- Mirrors auth.users so we can store a display name + avatar.
+-- Mirrors auth.users so we can store a display name + avatar + status.
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   phone text unique,
   username text,
   avatar_url text,
+  status text default 'Very busy',
   last_seen timestamptz default now() not null,
   created_at timestamptz default now() not null
 );
+
+-- Add the status column to existing databases (no-op if already present).
+alter table public.profiles add column if not exists status text default 'Very busy';
 
 -- Auto-create a profile row when a new auth user is created.
 create or replace function public.handle_new_user()

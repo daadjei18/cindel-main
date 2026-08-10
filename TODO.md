@@ -1,15 +1,14 @@
-# TODO — Fix infinite "Loading..." in Cindel
+# Task: Add profile name editing to the "Me" dropdown
 
-- [x] Plan approved
-- [x] 1. Rewrite `init()` in `hooks/useChat.ts`
-  - [x] Use `supabase.auth.getUser()` to get current user id
-  - [x] Log `user.id` to console to verify login
-  - [x] If no user id → set conversations=[], stop loading
-  - [x] 1s safety timeout to force `loading=false`
-  - [x] Error handling: console.log + "Failed to load chats"
-- [x] 2. Update `components/chat/ChatApp.tsx` (ensure overlay resolves)
-- [x] 3. Add RLS policies to `supabase/schema.sql`
-  - [x] participants self-select policy (`user_id = auth.uid()`)
-  - [x] messages select policy (conversation in participant list)
-- [x] 4. Run `npm run dev` and verify loading screen is gone
+## Plan
+- [x] Review current profile dropdown + data flow (ChatApp, useChat, chat-api, types)
+- [x] Get plan approval from user
 
+## Implementation
+- [x] Add `updateProfileUsername` to `lib/chat-api.ts`
+- [x] Add `setName` callback to `hooks/useChat.ts` (persist + update local state)
+- [x] Add editable name field to the profile dropdown in `components/chat/ChatApp.tsx`
+
+## Verify
+- [x] Run `npx tsc --noEmit` (no type errors)
+- [x] Confirm the profile dropdown lets the user edit and save their name

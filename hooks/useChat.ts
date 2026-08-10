@@ -8,6 +8,8 @@ import {
   fetchMessages,
   insertMessage,
   startConversationWith,
+  updateProfileStatus,
+  updateProfileUsername,
 } from '@/lib/chat-api'
 import type { ConversationPreview, Message, Profile } from '@/lib/types'
 
@@ -15,6 +17,8 @@ export type UseChatResult = {
   loading: boolean
   error: string | null
   currentUser: Profile | null
+  displayName: string
+  status: string
   conversations: ConversationPreview[]
   activeConversationId: string | null
   activeMessages: Message[]
@@ -22,10 +26,17 @@ export type UseChatResult = {
   setActiveConversationId: (id: string | null) => void
   sendMessage: (content: string) => Promise<void>
   startConversation: (phone: string) => Promise<{ ok: boolean; error?: string }>
+  setStatus: (status: string) => Promise<void>
+  setName: (name: string) => Promise<void>
 }
 
-export function useChat(): UseChatResult {
+const DEFAULT_STATUS = 'Very busy'
+const DEFAULT_NAME = 'Me'
+
+export function useChat(userId?: string): UseChatResult {
   const [currentUser, setCurrentUser] = useState<Profile | null>(null)
+  const [displayName, setDisplayName] = useState<string>(DEFAULT_NAME)
+  const [status, setStatusState] = useState<string>(DEFAULT_STATUS)
   const [conversations, setConversations] = useState<ConversationPreview[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [activeMessages, setActiveMessages] = useState<Message[]>([])
@@ -70,6 +81,7 @@ export function useChat(): UseChatResult {
         const convs = await fetchConversations(uid)
         if (cancelled) return
         setCurrentUser(me)
+        setStatusState(me?.status ?? DEFAULT_STATUS)
         setConversations(convs)
         setLoading(false)
       } catch (e) {
@@ -156,6 +168,39 @@ export function useChat(): UseChatResult {
     [getUid],
   )
 
+// Update the current user's status (local first, then persist).
+  const setStatus = useCallback(
+    async (next: string) => {
+      const trimmed = next.trim() || DEFAULT_STATUS
+      setStatusState(trimmed)
+      if (currentUser?.id) {
+        const res = await updateProfileStatus(currentUser.id, trimmed)
+        if (res.error) {
+          console.log('useChat: failed to persist status', res.error)
+        }
+      }
+    },
+    [currentUser],
+  )
+
+// Update the current user's display name (local first, then persist).
+  const setName = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim()
+      if (!trimmed) return
+      setDisplayName(trimmed)
+      setCurrentUser((prev) => (prev ? { ...prev, username: trimmed } : prev))
+      const uid = currentUser?.id ?? userId
+      if (uid) {
+        const res = await updateProfileUsername(uid, trimmed)
+        if (res.error) {
+          console.log('useChat: failed to persist name', res.error)
+        }
+      }
+    },
+    [currentUser, userId],
+  )
+
   const activeOther = useMemo(() => {
     const found = conversations.find((c) => c.conversationId === activeConversationId)
     return found?.other ?? null
@@ -165,6 +210,8 @@ export function useChat(): UseChatResult {
     loading,
     error,
     currentUser,
+    displayName,
+    status,
     conversations,
     activeConversationId,
     activeMessages,
@@ -172,5 +219,7 @@ export function useChat(): UseChatResult {
     setActiveConversationId,
     sendMessage,
     startConversation,
+    setStatus,
+    setName,
   }
 }

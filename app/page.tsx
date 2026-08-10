@@ -1,6 +1,10 @@
-import { redirect } from 'next/navigation'
+import App from '@/App'
 
-/** Home page simply points to the chat app. */
+/**
+ * Home page renders the standalone Cindel chat UI. This shows the full
+ * WhatsApp-style interface (sidebar + "Hive: Maya" chat) right at localhost
+ * without needing Supabase auth.
+ */
 export default function HomePage() {
-  redirect('/chat')
+  return <App />
 }

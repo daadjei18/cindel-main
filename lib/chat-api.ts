@@ -8,6 +8,7 @@ const DEFAULT_OTHER: Profile = {
   avatar_url: null,
   last_seen: null,
   created_at: null,
+  status: null,
 }
 
 /** Fetch the signed-in user's profile. */
@@ -35,7 +36,7 @@ export async function fetchConversations(uid: string): Promise<ConversationPrevi
 
   const { data: parts } = await supabase
     .from('conversation_participants')
-    .select(`conversation_id, profile:user_id (id, phone, username, avatar_url, last_seen)`)
+    .select(`conversation_id, profile:user_id (id, phone, username, avatar_url, last_seen, status)`)
     .in('conversation_id', convIds)
 
   const { data: msgs } = await supabase
@@ -89,6 +90,24 @@ export async function insertMessage(convId: string, senderId: string, content: s
     sender_id: senderId,
     content,
   })
+}
+
+/** Update the current user's status text in the database. */
+export async function updateProfileStatus(uid: string, status: string): Promise<{ error?: string }> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ status })
+    .eq('id', uid)
+  return { error: error?.message }
+}
+
+/** Update the current user's display name in the database. */
+export async function updateProfileUsername(uid: string, name: string): Promise<{ error?: string }> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ username: name })
+    .eq('id', uid)
+  return { error: error?.message }
 }
 
 /** Create (or reuse) a 1:1 conversation with the user who owns `phone`. */
