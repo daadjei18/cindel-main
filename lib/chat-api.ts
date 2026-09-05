@@ -1,16 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { ConversationPreview, Message, Profile } from '@/lib/types'
 
-const DEFAULT_OTHER: Profile = {
-  id: 'me',
-  phone: null,
-  username: 'Me',
-  avatar_url: null,
-  last_seen: null,
-  created_at: null,
-  status: null,
-}
-
 /** Fetch the signed-in user's profile. */
 export async function fetchCurrentUser(uid: string): Promise<Profile | null> {
   const { data } = await supabase
@@ -21,59 +11,56 @@ export async function fetchCurrentUser(uid: string): Promise<Profile | null> {
   return (data as Profile | null) ?? null
 }
 
-/** Load conversation previews (with the "other" participant + last message). */
-export async function fetchConversations(uid: string): Promise<ConversationPreview[]> {
-  const { data: membership } = await supabase
-    .from('conversation_participants')
-    .select('conversation_id')
-    .eq('user_id', uid)
-
-  const convIds = (membership ?? [])
-    .map((m) => (m as { conversation_id: string }).conversation_id)
-    .filter(Boolean)
-
-  if (convIds.length === 0) return []
-
-  const { data: parts } = await supabase
-    .from('conversation_participants')
-    .select(`conversation_id, profile:user_id (id, phone, username, avatar_url, last_seen, status)`)
-    .in('conversation_id', convIds)
-
-  const { data: msgs } = await supabase
-    .from('messages')
-    .select('conversation_id, content, created_at, sender_id')
-    .in('conversation_id', convIds)
-    .order('created_at', { ascending: true })
-
-  const byConv = new Map<string, Message[]>()
-  for (const m of msgs ?? []) {
-    const arr = byConv.get(m.conversation_id) ?? []
-    arr.push(m as Message)
-    byConv.set(m.conversation_id, arr)
-  }
-
-const previews: ConversationPreview[] = (parts ?? []).map((row) => {
-const convId = (row as { conversation_id: string }).conversation_id
-    // Supabase returns the joined profile as an array (to-one not inferred).
-    const rawProfile = (row as unknown as { profile?: Profile | Profile[] }).profile
-    const profile = Array.isArray(rawProfile) ? (rawProfile[0] as Profile) : rawProfile
-    const other = profile && profile.id !== uid ? profile : { ...DEFAULT_OTHER, id: uid }
-    const list = byConv.get(convId) ?? []
-    const last = list[list.length - 1]
-    return {
-      conversationId: convId,
-      other,
-      lastMessage: last ? (last.sender_id === uid ? `You: ${last.content}` : last.content) : 'Start chatting',
-      lastTime: last ? last.created_at : null,
-      unread: 0,
-    }
-  })
-
-  previews.sort((a, b) => (b.lastTime ?? '').localeCompare(a.lastTime ?? ''))
-  return previews
+type PreviewRow = {
+  conversation_id: string
+  other_id: string
+  other_username: string | null
+  other_avatar_url: string | null
+  other_status: string | null
+  other_last_seen: string | null
+  last_message: string | null
+  last_time: string | null
+  last_sender_id: string | null
+  unread_count: number | null
 }
 
-/** Load all messages for a conversation, oldest first. */
+/**
+ * One SQL call returns ONE row per conversation:
+ *  - no more duplicate "Me" row for your own participant entry
+ *  - no more downloading entire message histories (SQL picks the last one)
+ *  - no contact details exposed to other users
+ */
+export async function fetchConversations(uid: string): Promise<ConversationPreview[]> {
+  const { data, error } = await supabase.rpc('get_conversation_previews', { p_uid: uid })
+  if (error) {
+    console.log('fetchConversations error', error)
+    return []
+  }
+  const rows = (data ?? []) as PreviewRow[]
+  return rows
+    .map((r) => {
+      const mine = r.last_sender_id === uid
+      const other: Profile = {
+        id: r.other_id,
+        email: null, // email is never exposed to other clients
+        username: r.other_username,
+        avatar_url: r.other_avatar_url,
+        last_seen: r.other_last_seen,
+        status: r.other_status,
+        created_at: null,
+      }
+      return {
+        conversationId: r.conversation_id,
+        other,
+        lastMessage: r.last_message ? (mine ? `You: ${r.last_message}` : r.last_message) : 'Start chatting',
+        lastTime: r.last_time,
+        unread: Number(r.unread_count ?? 0),
+      }
+    })
+    .sort((a, b) => (b.lastTime ?? '').localeCompare(a.lastTime ?? ''))
+}
+
+/** Load all messages for one conversation (oldest first) — now bounded to one chat. */
 export async function fetchMessages(convId: string): Promise<Message[]> {
   const { data } = await supabase
     .from('messages')
@@ -83,13 +70,13 @@ export async function fetchMessages(convId: string): Promise<Message[]> {
   return (data ?? []) as Message[]
 }
 
-/** Insert a new message into a conversation. */
+/** Insert a message and return the saved row (needed for optimistic UI). */
 export async function insertMessage(convId: string, senderId: string, content: string) {
-  return supabase.from('messages').insert({
-    conversation_id: convId,
-    sender_id: senderId,
-    content,
-  })
+  return supabase
+    .from('messages')
+    .insert({ conversation_id: convId, sender_id: senderId, content })
+    .select('*')
+    .single()
 }
 
 /** Update the current user's status text in the database. */
@@ -110,13 +97,31 @@ export async function updateProfileUsername(uid: string, name: string): Promise<
   return { error: error?.message }
 }
 
-/** Create (or reuse) a 1:1 conversation with the user who owns `phone`. */
-export async function startConversationWith(phone: string): Promise<{ convId?: string; error?: string }> {
-  const normalized = phone.replace(/\D/g, '')
-  if (!normalized) return { error: 'Enter a phone number.' }
+/** Create (or reuse) a 1:1 conversation with the user who owns `username`. */
+export async function startConversationWith(username: string): Promise<{ convId?: string; error?: string }> {
+  const normalized = username.trim()
+  if (!normalized) return { error: 'Enter a username.' }
   const { data: convId, error } = await supabase.rpc('create_conversation', {
-    other_phone: normalized,
+    other_username: normalized,
   })
   if (error) return { error: error.message }
   return { convId: convId as string }
 }
+
+/** Load saved hive order (array of conversation ids, first = top-left). */
+export async function fetchHiveOrder(uid: string): Promise<string[]> {
+  const { data } = await supabase
+    .from('hive_positions')
+    .select('conversation_id, position')
+    .eq('user_id', uid)
+    .order('position', { ascending: true })
+  return ((data ?? []) as { conversation_id: string }[]).map((r) => r.conversation_id)
+}
+
+/** Save hive order. Upsert = one atomic call (no delete-then-insert). */
+export async function saveHiveOrder(uid: string, orderedIds: string[]) {
+  return supabase.from('hive_positions').upsert(
+    orderedIds.map((conversation_id, position) => ({ user_id: uid, conversation_id, position })),
+    { onConflict: 'user_id,conversation_id' },
+  )
+}

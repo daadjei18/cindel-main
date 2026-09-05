@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { MessageCircle, Plus } from 'lucide-react'
 import {
   DndContext,
   PointerSensor,
@@ -28,14 +28,26 @@ import type { ConversationPreview } from '@/lib/types'
  */
 const HEX = 'hex'
 
-/** Minimum number of cells so the honeycomb always looks full. */
-const MIN_HIVES = 12
+/** One "+ New chat" slot always trails the real conversations. */
+const MIN_HIVES = 1
 
-/** Fixed hexagon size. */
-const HIVE_SIZE = 'h-28 w-24'
+/**
+ * Compact hexagon (64px x 74px) so a full desktop row of 4 fits the fixed
+ * 280px rail without clipping. 4 x (64 + 2px gap) = 264px = the padded rail.
+ */
+const HIVE_SIZE = 'h-[74px] w-16'
 
-/** Offset for even rows = half a hexagon width (w-24 = 96px => 48px = pl-12). */
-const OFFSET_CLASS = 'pl-12'
+/** One honeycomb slot = hexagon width (64px) + a 2px seam. */
+const PITCH = 66
+
+/**
+ * True honeycomb interlock inside the 280px rail:
+ *  - rows are centered; an offset row has one fewer hexagon, so centering
+ *    shifts it by exactly half a hexagon pitch (no manual padding needed)
+ *  - each row after the first pulls up by ~1/4 of the hex height so the
+ *    hexagon points nest into the valleys of the row above
+ */
+const ROW_OVERLAP_CLASS = '-mt-[18px]'
 
 // ---------------------------------------------------------------------------
 // Hive shape + mapper
@@ -53,7 +65,8 @@ export type Hive = {
 
 /**
  * Maps Supabase conversation previews into Hive cells.
- * Empty hives are appended to fill the grid up to at least MIN_HIVES cells.
+ * Real conversations first, then a single "+ New chat" slot so the grid never
+ * fills with dead placeholder hives.
  * (conversations already come from useChat() -> lib/chat-api.ts -> Supabase)
  */
 export function mapConversationsToHives(conversations: ConversationPreview[]): Hive[] {
@@ -65,16 +78,15 @@ export function mapConversationsToHives(conversations: ConversationPreview[]): H
     position: i,
   }))
 
-  while (hives.length < MIN_HIVES) {
-    hives.push({
-      id: `empty-${hives.length}`,
-      name: '',
-      avatar: '',
-      lastMessage: '',
-      empty: true,
-      position: hives.length,
-    })
-  }
+  // Always end with exactly one "+" tile to start a new chat.
+  hives.push({
+    id: `empty-${hives.length}`,
+    name: '',
+    avatar: '',
+    lastMessage: '',
+    empty: true,
+    position: hives.length,
+  })
   // Load hives already sorted by position (drag/drop reorder persists).
   return hives.sort((a, b) => a.position - b.position)
 }
@@ -108,10 +120,13 @@ export function buildRows(hives: Hive[], cols: number): HiveRow[] {
   return rows
 }
 
-/** Responsive columns: Mobile 2, Tablet 3, Desktop 4. */
+/**
+ * Columns by the HONEYCOMB RAIL width (a fixed 280px column, not the whole
+ * viewport). Anything >= ~210px fits 4 compact hexagons (264px); only very
+ * narrow rails drop to 2.
+ */
 function colsForWidth(width: number): number {
-  if (width < 640) return 2
-  if (width < 1024) return 3
+  if (width < 210) return 2
   return 4
 }
 
@@ -174,11 +189,11 @@ function SortableCell({ hive, isActive, onSelectHive, onEmptyClick }: SortableCe
               <span
                 className={`${HEX} absolute inset-[2px] flex items-center justify-center border-2 border-dashed border-[#555] bg-transparent`}
               >
-                <Plus className="size-5 text-[#555]" />
+                <Plus className="size-4 text-[#555]" />
               </span>
             </span>
           </button>
-          <span className="mt-1 text-[8px] text-cindel-muted">Empty Hive</span>
+          <span className="text-[8px] text-cindel-muted">New chat</span>
         </>
       ) : (
         <>
@@ -194,19 +209,18 @@ function SortableCell({ hive, isActive, onSelectHive, onEmptyClick }: SortableCe
           >
             <span className={`${HEX} absolute inset-0 bg-gradient-to-b from-cindel-panel to-[#16161c]`}>
               <span
-                className={`${HEX} absolute inset-[2px] flex flex-col items-center justify-center gap-1 bg-[#0d0d11] p-2`}
+                className={`${HEX} absolute inset-[2px] flex flex-col items-center justify-center gap-0.5 bg-[#0d0d11] p-1.5`}
               >
-                <Avatar name={hive.name} size="size-10" />
-                <span className="max-w-full truncate text-[10px] font-semibold text-white">
+                <Avatar name={hive.name} size="size-8" />
+                <span className="max-w-full truncate text-[9px] font-semibold text-white">
                   {hive.name}
                 </span>
-                <span className="max-w-full truncate text-[8px] text-cindel-muted">
+                <span className="max-w-full truncate text-[7px] text-cindel-muted">
                   {hive.lastMessage}
                 </span>
               </span>
             </span>
           </button>
-          <span className="mt-1 text-[8px] text-cindel-muted">{hive.name}</span>
         </>
       )}
     </div>
@@ -241,6 +255,9 @@ export function HivesGrid({
 
   // Supabase data -> honeycomb grid
   const hives = useMemo(() => mapConversationsToHives(conversations), [conversations])
+
+  // Zero real conversations: no filler hexes, show a designed empty state.
+  const isEmpty = hives.length === 1 && hives[0]?.empty === true
 
   // Responsive columns based on the actual container width (2 / 3 / 4).
   useEffect(() => {
@@ -313,42 +330,80 @@ export function HivesGrid({
   return (
     <div
       ref={gridRef}
-      className="h-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4"
+      className="h-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-4"
     >
+      {isEmpty ? (
+        <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+          <span
+            className={`${HEX} flex size-16 items-center justify-center border-2 border-dashed border-[#555] bg-transparent`}
+          >
+            <MessageCircle className="size-6 text-[#555]" />
+          </span>
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-semibold text-white">No hives yet</p>
+            <p className="max-w-[200px] text-xs leading-5 text-cindel-muted">
+              Start a chat with a Cindel user and it will appear here as a hive.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onNewHive}
+            className="rounded-lg bg-cindel-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-cindel-accent/80"
+          >
+            Start your first chat
+          </button>
+        </div>
+      ) : (
       <DndContext sensors={sensors} onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
         <SortableContext items={hives.map((h) => h.id)} strategy={rectSortingStrategy}>
-          <div className="flex flex-col gap-6">
-            {rows.map((row, rowIndex) => (
-              <div
-                key={rowIndex}
-                className={`flex w-full gap-x-4 ${
-                  row.isOffset ? `justify-center ${OFFSET_CLASS}` : 'justify-center'
-                }`}
-              >
-                {row.cells.map((hive, cellIndex) => {
-                  const isActive = !hive.empty && hive.id === activeConversationId
-                  return (
-                    <div
-                      key={hive.id}
-                      ref={(el) => {
-                        cellRefs.current.set(hive.id, el)
-                      }}
-                      data-hive-index={row.startIndex + cellIndex}
-                    >
-                      <SortableCell
-                        hive={hive}
-                        isActive={isActive}
-                        onSelectHive={onSelectHive}
-                        onEmptyClick={handleEmptyClick}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
+          <div className="flex flex-col">
+            {rows.map((row, rowIndex) => {
+              // Slot-exact strips: every row is a fixed-width strip of N cell
+              // slots. Missing slots render as invisible spacers, so a row's
+              // cells always sit in the SAME grid columns (no drifting when a
+              // row is partially full). Offset rows are one slot narrower and
+              // centered, which shifts them half a pitch -> real interlock.
+              const slotCount = row.isOffset ? cols - 1 : cols
+              const stripWidth = slotCount * PITCH
+              const emptySlots = Math.max(slotCount - row.cells.length, 0)
+              return (
+                <div
+                  key={rowIndex}
+                  className={`mx-auto flex justify-start ${
+                    rowIndex > 0 ? ROW_OVERLAP_CLASS : ''
+                  }`}
+                  style={{ width: stripWidth }}
+                >
+                  {row.cells.map((hive, cellIndex) => {
+                    const isActive = !hive.empty && hive.id === activeConversationId
+                    return (
+                      <div
+                        key={hive.id}
+                        ref={(el) => {
+                          cellRefs.current.set(hive.id, el)
+                        }}
+                        data-hive-index={row.startIndex + cellIndex}
+                        className="w-[66px] shrink-0"
+                      >
+                        <SortableCell
+                          hive={hive}
+                          isActive={isActive}
+                          onSelectHive={onSelectHive}
+                          onEmptyClick={handleEmptyClick}
+                        />
+                      </div>
+                    )
+                  })}
+                  {Array.from({ length: emptySlots }).map((_, i) => (
+                    <div key={`pad-${i}`} className="w-[66px] shrink-0" aria-hidden="true" />
+                  ))}
+                </div>
+              )
+            })}
           </div>
         </SortableContext>
       </DndContext>
+      )}
     </div>
   )
 }

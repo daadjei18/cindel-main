@@ -1,7 +1,7 @@
 /** A user profile / participant. */
 export type Profile = {
   id: string
-  phone: string | null
+  email: string | null
   username: string | null
   avatar_url: string | null
   last_seen: string | null

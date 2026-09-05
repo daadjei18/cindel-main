@@ -8,6 +8,8 @@ import { toast } from 'sonner'
 
 import { createClient } from '@/lib/supabase/client'
 import { CindelBrand } from '@/components/cindel-brand'
+import { CodeStep } from '@/components/auth/code-step'
+import { PasswordChecklist, passwordMeetsRules } from '@/components/auth/password-checklist'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -19,115 +21,197 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-const countryCodes = [
-  { code: '+233', label: 'Ghana (+233)' },
-  { code: '+1', label: 'United States (+1)' },
-  { code: '+44', label: 'United Kingdom (+44)' },
-  { code: '+234', label: 'Nigeria (+234)' },
-  { code: '+27', label: 'South Africa (+27)' },
-  { code: '+254', label: 'Kenya (+254)' },
-  { code: '+91', label: 'India (+91)' },
-  { code: '+49', label: 'Germany (+49)' },
-  { code: '+33', label: 'France (+33)' },
-  { code: '+971', label: 'UAE (+971)' },
-]
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const USERNAME_RE = /^[a-zA-Z0-9_-]{3,20}$/
+const PASSWORD_MIN = 8
+const DEV_AUTH_COOKIE = 'cindel_dev_auth'
 
 function signUpErrorMessage(error: unknown): string {
-  const { code, status } = (error ?? {}) as { code?: string; status?: number }
+  const { code, message, status } = (error ?? {}) as {
+    code?: string
+    message?: string
+    status?: number
+  }
 
   if (code === 'over_request_rate_limit' || status === 429) {
     return 'Too many attempts. Please wait a moment and try again.'
   }
   if (code === 'otp_expired') {
-    return 'That code has expired. Please request a new one.'
+    return 'That code has expired. Request a new one below.'
   }
   if (code === 'invalid_token') {
     return 'That code is invalid. Please check it and try again.'
   }
   if (code === 'validation_failed') {
-    return 'Please enter a valid phone number.'
+    return 'Please enter a valid email address.'
   }
-  if (code === 'provider_disabled') {
-    return 'Phone sign in is currently disabled. Please try again later.'
+  if (code === 'provider_disabled' || code === 'email_provider_disabled') {
+    return 'Email sign-up is currently disabled. Please try again later.'
+  }
+  if (code === 'user_already_exists' || code === 'email_exists') {
+    return 'An account with this email already exists. Try logging in instead.'
+  }
+  if (code === 'weak_password') {
+    return message || `Password must be at least ${PASSWORD_MIN} characters.`
+  }
+  if (message && /duplicate key/i.test(message)) {
+    return 'That username is already taken. Please choose another.'
   }
   return 'Unable to complete sign-up. Please try again.'
 }
 
-const DEV_AUTH_COOKIE = 'cindel_dev_auth'
+function setDevAuthCookie() {
+  document.cookie = `${DEV_AUTH_COOKIE}=1; path=/; max-age=86400`
+}
+
+/** Unique fallback so every user is findable by username. */
+function defaultUsername(): string {
+  return `user-${Math.random().toString(36).slice(2, 8)}`
+}
+
+/** Dev mode: generate the mock code shown on screen. */
+function generateDevCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString()
+}
 
 export default function SignUpPage() {
-  const [countryCode, setCountryCode] = useState('+233')
-  const [phone, setPhone] = useState('')
-  const [code, setCode] = useState('')
-  const [devCode, setDevCode] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
+  const [devCode, setDevCode] = useState<string | null>(null)
   const [isCodeSent, setIsCodeSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
   const isDev = process.env.NODE_ENV !== 'production'
-  const fullPhone = `${countryCode}${phone.replace(/\D+/g, '')}`
+  const normalizedEmail = email.trim().toLowerCase()
 
-  const handleSendCode = async (e: React.FormEvent) => {
+  const resetToDetails = () => {
+    setIsCodeSent(false)
+    setDevCode(null)
+    setError(null)
+  }
+
+  const validate = (): string | null => {
+    if (!EMAIL_RE.test(normalizedEmail)) {
+      return 'Please enter a valid email address.'
+    }
+    const trimmedUsername = username.trim()
+    if (trimmedUsername && !USERNAME_RE.test(trimmedUsername)) {
+      return 'Username must be 3-20 characters: letters, numbers, underscores, or dashes.'
+    }
+    if (!passwordMeetsRules(password)) {
+      return 'Password needs at least 8 characters, an uppercase and lowercase letter, a number, and a symbol.'
+    }
+    return null
+  }
+
+  // ---------- Stage 1: password sign-up ----------
+
+  const handlePasswordSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (fullPhone.length < 8) {
-      setError('Please enter a valid phone number.')
+    const validationError = validate()
+    if (validationError) {
+      setError(validationError)
       return
     }
     setIsLoading(true)
     setError(null)
 
-    // Dev mode: generate a mock code shown on screen (no SMS needed).
+    // Dev mode: no real backend, so just simulate account creation and move to
+    // the code stage (code is shown on screen).
     if (isDev) {
-      const generated = Math.floor(100000 + Math.random() * 900000).toString()
-      setDevCode(generated)
-      setCode('')
+      setDevCode(generateDevCode())
       setIsCodeSent(true)
       setIsLoading(false)
-      toast.success('Dev mode: code generated')
+      toast.success('Dev mode: account will be created — code generated')
       return
     }
 
     try {
-      const { error } = await createClient().auth.signInWithOtp({
-        phone: fullPhone,
-        options: { shouldCreateUser: true },
+      const supabase = createClient()
+      // 1. Create the account (email + password + username).
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          data: { username: username.trim() || defaultUsername() },
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/chat`,
+        },
       })
-      if (error) throw error
+      if (signUpError) throw signUpError
+
+      // 2. Drop any session Supabase just issued, so the emailed code is the
+      //    final gate before the account can be used.
+      await supabase.auth.signOut()
+
+      // 3. Email a fresh 6-digit code to confirm + sign in.
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: { shouldCreateUser: false },
+      })
+      if (otpError) throw otpError
+
       setIsCodeSent(true)
-      toast.success('Code sent. Check your phone.')
+      toast.success('Account created. Code sent — check your email.')
     } catch (err) {
-      console.error('[cindel] Send OTP error:', err)
+      console.error('[cindel] Password sign-up error:', err)
       setError(signUpErrorMessage(err))
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleVerifyCode = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // ---------- Resend (stage 2) ----------
+
+  const resendCode = async () => {
+    // Dev: regenerate the mock code shown on screen.
+    if (isDev) {
+      setDevCode(generateDevCode())
+      toast.success('Dev mode: new code generated')
+      return
+    }
+    try {
+      const { error } = await createClient().auth.signInWithOtp({
+        email: normalizedEmail,
+        // The account was already created in stage 1 — never auto-create here.
+        options: { shouldCreateUser: false },
+      })
+      if (error) throw error
+      toast.success('New code sent. Check your email.')
+    } catch (err) {
+      console.error('[cindel] Resend OTP error:', err)
+      setError(signUpErrorMessage(err))
+      throw err
+    }
+  }
+
+  // ---------- Stage 2: verify the code ----------
+
+  const handleVerifyCode = async (code: string) => {
     setIsLoading(true)
     setError(null)
 
     // Dev mode: verify against the on-screen mock code, then set a dev cookie.
     if (isDev) {
       if (code === devCode) {
-        document.cookie = `${DEV_AUTH_COOKIE}=1; path=/; max-age=86400`
+        setDevAuthCookie()
         toast.success('Account created. Welcome to Cindel!')
         router.push('/chat')
         router.refresh()
       } else {
         setError('That code is invalid. Please check it and try again.')
+        setIsLoading(false)
       }
-      setIsLoading(false)
       return
     }
 
     try {
       const { error } = await createClient().auth.verifyOtp({
-        phone: fullPhone,
+        email: normalizedEmail,
         token: code,
-        type: 'sms',
+        type: 'email',
       })
       if (error) throw error
       toast.success('Account created. Welcome to Cindel!')
@@ -152,78 +236,83 @@ export default function SignUpPage() {
           <CardHeader>
             <CardTitle className="text-xl font-oswald text-center uppercase text-[#5130e0]">Create your account</CardTitle>
             <CardDescription>
-              {isCodeSent ? 'Enter the 6-digit code sent to your phone.' : 'Enter your phone number to get started.'}
+              {isCodeSent
+                ? 'Account created — now confirm it&apos;s you.'
+                : 'Pick a password — we&apos;ll email you a code to verify your account.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={isCodeSent ? handleVerifyCode : handleSendCode} className="flex flex-col gap-6">
-              {!isCodeSent && (
+            {isCodeSent ? (
+              <CodeStep
+                email={normalizedEmail}
+                isDev={isDev}
+                devCode={devCode}
+                error={error}
+                busy={isLoading}
+                onVerify={(code) => void handleVerifyCode(code)}
+                onResend={() => resendCode()}
+                onBack={resetToDetails}
+                backLabel="Use a different email or password"
+              />
+            ) : (
+              <form onSubmit={handlePasswordSignUp} className="mt-6 flex flex-col gap-6">
                 <div className="grid gap-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <div className="flex gap-2">
-                    <select
-                      id="country-code"
-                      value={countryCode}
-                      onChange={(e) => setCountryCode(e.target.value)}
-                      className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                      aria-label="Country code"
-                    >
-                      {countryCodes.map((country) => (
-                        <option key={country.code} value={country.code}>
-                          {country.label}
-                        </option>
-                      ))}
-                    </select>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      placeholder="055 123 4567"
-                      required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/[^\d\s-]/g, ''))}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">We&apos;ll send a 6-digit code to this number.</p>
-                </div>
-              )}
-              {isCodeSent && (
-                <div className="grid gap-2">
-                  <Label htmlFor="code">6-digit code</Label>
-                  {isDev && (
-                    <div className="rounded-lg border border-dashed bg-muted/50 p-3 text-center">
-                      <p className="text-xs text-muted-foreground">Dev mode verification code</p>
-                      <p className="mt-1 font-mono text-2xl font-bold tracking-widest">{devCode}</p>
-                    </div>
-                  )}
+                  <Label htmlFor="email">Email Address</Label>
                   <Input
-                    id="code"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    placeholder="123456"
-                    maxLength={6}
-                    pattern="[0-9]{6}"
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
                     required
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
-              )}
-              {error && (
-                <p className="text-sm text-destructive" role="alert">
-                  {error}
-                </p>
-              )}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (isCodeSent ? 'Verifying...' : 'Sending...') : (isCodeSent ? 'Verify' : 'Send Code')}
-              </Button>
-              {isCodeSent && (
-                <button type="button" className="text-sm text-muted-foreground underline-offset-4 hover:underline" onClick={() => { setIsCodeSent(false); setCode(''); setError(null) }}>
-                  Use a different phone number
-                </button>
-              )}
-            </form>
+                <div className="grid gap-2">
+                  <Label htmlFor="username">Username <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    autoComplete="nickname"
+                    placeholder="e.g. nana"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">How friends find you to start a chat. A random one is picked if you leave it blank.</p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={`At least ${PASSWORD_MIN} characters`}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <PasswordChecklist password={password} />
+                  {isDev && (
+                    <p className="text-xs text-muted-foreground">
+                      Dev mode: any email and password work.
+                    </p>
+                  )}
+                </div>
+                {error && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {error}
+                  </p>
+                )}
+                <Button
+                  type="submit"
+                  className="w-full bg-[#581bf2] hover:bg-[#6b2ff7] disabled:bg-[#581bf2]/50"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Creating account...' : 'Create Account'}
+                </Button>
+              </form>
+            )}
+
             <p className="mt-6 text-center text-sm text-muted-foreground">
               {'Already have an account? '}
               <Link
@@ -235,6 +324,13 @@ export default function SignUpPage() {
             </p>
           </CardContent>
         </Card>
+        <p className="text-center text-xs text-muted-foreground">
+          By creating an account, you agree to Cindel&apos;s{' '}
+          <Link href="/privacy" className="underline underline-offset-4 hover:text-foreground">
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </div>
     </main>
   )

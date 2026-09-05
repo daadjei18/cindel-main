@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { ArrowLeft, Edit3 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AppHeader } from './AppHeader'
@@ -17,7 +18,7 @@ export type ChatAppProps = {
   userId: string
 }
 
-type MobileView = 'sidebar' | 'hives' | 'chat'
+type MobileView = 'hives' | 'chat'
 
 /**
  * Composes the WhatsApp-like layout with a fixed header and three independent
@@ -40,20 +41,42 @@ export function ChatApp({ userId }: ChatAppProps) {
     startConversation,
     setStatus,
     setName,
+    previewHiveCount,
+    setPreviewHiveCount,
   } = useChat(userId)
 
   const [showNewChat, setShowNewChat] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
-  const [phone, setPhone] = useState('')
+  const [username, setUsername] = useState('')
   const [isStarting, setIsStarting] = useState(false)
   const [query, setQuery] = useState('')
 
   // Mobile: show one panel at a time (hives is the default landing view).
   const [mobileView, setMobileView] = useState<MobileView>('hives')
 
+  // Close the profile / new-chat panels with the Escape key. If the profile is
+  // open and an input is focused, blur it first so uncontrolled name/status
+  // edits are saved (save-on-blur) instead of discarded.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showProfile && document.activeElement instanceof HTMLInputElement) {
+          document.activeElement.blur()
+        }
+        setShowProfile(false)
+        setShowNewChat(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [showProfile])
+
   const openHive = (id: string) => {
     setActiveConversationId(id)
-    if (window.innerWidth < 1024) setMobileView('chat')
+    // Always flip to the chat view. On desktop this is a no-op (the bottom nav
+    // is lg:hidden), and on mobile it keeps the Chat tab highlighted in sync
+    // with the pane that's actually shown — no JS/CSS breakpoint mismatch.
+    setMobileView('chat')
   }
 
   // Called by HivesGrid after a drag-and-drop reorder. Persist the new order.
@@ -63,18 +86,18 @@ export function ChatApp({ userId }: ChatAppProps) {
   }
 
   const handleStart = async () => {
-    if (!phone.trim()) return
+    if (!username.trim()) return
     setIsStarting(true)
-    const res = await startConversation(phone)
+    const res = await startConversation(username)
     setIsStarting(false)
     if (res.ok) {
       setShowNewChat(false)
-      setPhone('')
+      setUsername('')
       toast.success('Conversation started')
     } else if (res.error) {
       toast.error(
-        res.error === 'No user with that phone number'
-          ? 'No Cindel user with that phone.'
+        res.error === 'No user with that username'
+          ? 'No Cindel user with that username.'
           : res.error,
       )
     }
@@ -88,9 +111,11 @@ export function ChatApp({ userId }: ChatAppProps) {
         onNewHive={() => setShowNewChat(true)}
         query={query}
         onQueryChange={setQuery}
+        previewHiveCount={previewHiveCount}
+        onPreviewHiveCountChange={setPreviewHiveCount}
       />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="hidden min-h-0 flex-1 overflow-hidden lg:flex">
         {/* Left-most vertical rail — 72px, independent scroll */}
         <Sidebar
           currentUser={currentUser}
@@ -98,7 +123,7 @@ export function ChatApp({ userId }: ChatAppProps) {
         />
 
         {/* Hives honeycomb column — fixed 280px, independent scroll */}
-        <div className="hidden w-[280px] min-w-0 shrink-0 border-r border-cindel-border sm:block">
+        <div className="w-[280px] min-w-0 shrink-0 border-r border-cindel-border">
           <HivesGrid
             conversations={conversations}
             activeConversationId={activeConversationId}
@@ -110,7 +135,7 @@ export function ChatApp({ userId }: ChatAppProps) {
         </div>
 
         {/* ChatWindow — takes the remaining space, independent scroll */}
-        <div className="hidden min-w-0 flex-1 border-l border-cindel-border lg:block">
+        <div className="min-w-0 flex-1 border-l border-cindel-border">
           <ChatWindow
             other={activeOther}
             myId={userId}
@@ -121,17 +146,18 @@ export function ChatApp({ userId }: ChatAppProps) {
         </div>
       </div>
 
-      {/* Mobile view switcher — shows depending on the selected mobile view */}
-      {mobileView === 'sidebar' && (
-        <div className="absolute inset-0 z-10 sm:hidden">
-          <Sidebar
-            currentUser={currentUser}
-            onOpenProfile={() => setShowProfile(true)}
+      {/* Mobile: one pane at a time below the header — HivesGrid or ChatWindow */}
+      <div className="min-h-0 flex-1 lg:hidden">
+        {mobileView === 'hives' ? (
+          <HivesGrid
+            conversations={conversations}
+            activeConversationId={activeConversationId}
+            query={query}
+            onSelectHive={openHive}
+            onNewHive={() => setShowNewChat(true)}
+            onReorderHives={handleReorderHives}
           />
-        </div>
-      )}
-      {mobileView === 'chat' && (
-        <div className="absolute inset-0 z-20 flex flex-col bg-cindel-bg md:hidden">
+        ) : (
           <ChatWindow
             other={activeOther}
             myId={userId}
@@ -139,19 +165,20 @@ export function ChatApp({ userId }: ChatAppProps) {
             onSend={(content) => void sendMessage(content)}
             onOpenProfile={() => toast.info(`${activeOther?.username ?? 'User'}'s profile`)}
           />
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Profile dropdown — anchored to the left rail, opens via the "Me" button */}
       {showProfile && (
-        <div className="fixed inset-0 z-30 sm:left-[72px] sm:top-0 sm:right-auto sm:h-full sm:w-72">
-          {/* Backdrop on mobile only */}
+        <>
+          {/* Transparent full-screen click-away layer (catches clicks outside the panel on all breakpoints) */}
           <div
-            className="absolute inset-0 bg-black/50 sm:hidden"
+            className="fixed inset-0 z-30"
             onClick={() => setShowProfile(false)}
+            aria-hidden="true"
           />
           <div
-            className="absolute bottom-0 left-0 top-0 flex w-64 flex-col gap-3 border-r border-cindel-border bg-cindel-header p-4 shadow-xl sm:h-full sm:w-auto sm:border"
+            className="fixed inset-y-0 left-0 z-30 flex w-full flex-col gap-3 overflow-y-auto border-r border-cindel-border bg-cindel-header p-4 shadow-xl lg:left-[72px] lg:w-72 lg:border"
             role="dialog"
             aria-modal="true"
           >
@@ -204,11 +231,11 @@ export function ChatApp({ userId }: ChatAppProps) {
               </span>
             </label>
 
-            {/* Phone */}
+            {/* Email */}
             <div className="flex flex-col gap-1 text-xs text-cindel-muted">
-              <span className="font-medium">Phone</span>
+              <span className="font-medium">Email</span>
               <span className="rounded-lg border border-cindel-border bg-cindel-panel px-3 py-2 text-sm text-white">
-                {currentUser?.phone ?? 'No phone'}
+                {currentUser?.email ?? 'No email'}
               </span>
             </div>
 
@@ -218,6 +245,7 @@ export function ChatApp({ userId }: ChatAppProps) {
                 <Edit3 className="size-3" /> Status
               </span>
               <input
+                key={status}
                 defaultValue={status}
                 onBlur={(e) => void setStatus(e.target.value)}
                 onKeyDown={(e) => {
@@ -231,20 +259,26 @@ export function ChatApp({ userId }: ChatAppProps) {
               </span>
             </label>
 
-            <div className="mt-auto rounded-lg bg-cindel-panel px-3 py-2 text-center text-xs text-cindel-muted">
-              Cindel v0.1.0
+            <div className="mt-auto flex flex-col gap-1 rounded-lg bg-cindel-panel px-3 py-2 text-center text-xs text-cindel-muted">
+              <span>Cindel v0.1.0</span>
+              <Link
+                href="/privacy"
+                className="hover:text-cindel-accent"
+              >
+                Privacy Policy
+              </Link>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Mobile bottom nav */}
-      <nav className="flex shrink-0 items-center justify-around border-t border-cindel-border bg-cindel-header py-2 md:hidden">
+      <nav className="flex shrink-0 items-center justify-around border-t border-cindel-border bg-cindel-header py-2 lg:hidden">
         <button
           type="button"
-          onClick={() => setMobileView('sidebar')}
+          onClick={() => setShowProfile(true)}
           className={`rounded-lg px-4 py-2 text-xs font-semibold transition ${
-            mobileView === 'sidebar'
+            showProfile
               ? 'bg-cindel-panel text-cindel-accent'
               : 'text-cindel-muted hover:text-white'
           }`}
@@ -314,16 +348,15 @@ export function ChatApp({ userId }: ChatAppProps) {
               <h2 className="text-sm font-bold text-white">New Chat</h2>
             </div>
             <p className="mt-3 text-xs text-cindel-muted">
-              Enter the phone number of a Cindel user to start chatting.
+              Enter the username of a Cindel user to start chatting.
             </p>
             <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void handleStart()
               }}
-              placeholder="e.g. 233550123456"
-              inputMode="tel"
+              placeholder="e.g. nana"
               className="mt-3 w-full rounded-lg border border-cindel-border bg-cindel-panel px-3 py-2 text-sm text-white outline-none placeholder:text-cindel-muted focus:border-cindel-accent"
             />
             <button

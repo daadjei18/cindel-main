@@ -7,7 +7,7 @@ const DEV_AUTH_COOKIE = 'cindel_dev_auth'
  * In production this always returns null, so protected pages fall through to
  * the real Supabase session check as normal.
  */
-export async function getDevUser(): Promise<{ id: string; phone?: string } | null> {
+export async function getDevUser(): Promise<{ id: string; email?: string } | null> {
   if (process.env.NODE_ENV === 'production') return null
 
   try {

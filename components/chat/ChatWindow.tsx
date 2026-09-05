@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { MessageCircle, MoreHorizontal, Phone, Video } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { MessageInput } from './MessageInput'
+
 import { formatTime } from '@/lib/chat-utils'
 import type { Message, Profile } from '@/lib/types'
 

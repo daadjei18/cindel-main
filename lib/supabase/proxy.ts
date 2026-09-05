@@ -53,8 +53,11 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isAuthRoute = pathname.startsWith('/auth')
 
+  // Public marketing/legal pages that logged-out visitors may view.
+  const isPublicPath = pathname === '/privacy'
+
   // Dev mode: allow a local dev cookie to stand in for a real session so the
-  // phone+OTP flow can be tested without an SMS provider.
+  // email+OTP flow can be tested without an SMTP provider.
   const DEV_AUTH_COOKIE = 'cindel_dev_auth'
   const isDevAuth =
     process.env.NODE_ENV !== 'production' &&
@@ -62,8 +65,9 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthenticated = !!user || isDevAuth
 
-  // Anything outside the /auth/* flow requires an authenticated user.
-  if (!isAuthenticated && !isAuthRoute) {
+  // Anything outside the /auth/* flow (and public legal pages) requires an
+  // authenticated user.
+  if (!isAuthenticated && !isAuthRoute && !isPublicPath) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
